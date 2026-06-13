@@ -167,44 +167,50 @@ function updateBarChart(svgNode) {
     .attr("height", d => chartHeight - yScale(d[dataType]));
 }
 
+function getChartPanelSize(svgNode) {
+  var panel = svgNode.parentNode;
+  if (!panel) return { width: 0, height: 0 };
+  return {
+    width: panel.clientWidth,
+    height: panel.clientHeight
+  };
+}
+
 function responsivefyBar(svg) {
-  const container = d3.select(svg.node().parentNode);
-  const chartsContainer = d3.select('.charts-container');
-  
-
   function resizeBar() {
-    // Get new dimensions
-    const targetWidth = parseInt(chartsContainer.style("width"));
-    const containerHeight = parseInt(chartsContainer.style("height"));
-    const targetHeight = containerHeight * 0.47;
+    var size = getChartPanelSize(svg.node());
+    if (size.width === 0 || size.height === 0) return;
 
-    // Update SVG dimensions
-    svg.attr("width", targetWidth)
-       .attr("height", targetHeight);
+    svg.attr("width", size.width)
+       .attr("height", size.height);
 
-    // Redraw chart with new dimensions
     if (svg.node().__currentData.length > 0) {
       updateBarChart(svg.node());
     }
   }
 
-  // Add debounced resize handler
-  let resizeTimeout;
-  const debouncedResize = () => {
+  var resizeTimeout;
+  function debouncedResize() {
     clearTimeout(resizeTimeout);
-    resizeTimeout = setTimeout(resizeBar, 250);
-  };
+    resizeTimeout = setTimeout(resizeBar, 150);
+  }
 
-  // Initial resize
   resizeBar();
-  
-  // Add resize listener
-  window.addEventListener('resize', debouncedResize);
-  
-  // Return remove listener function
+
+  d3.select(window).on("resize.bar", debouncedResize);
+
+  if (typeof ResizeObserver !== "undefined") {
+    var observer = new ResizeObserver(debouncedResize);
+    observer.observe(svg.node().parentNode);
+    svg.node().__chartResizeObserver = observer;
+  }
+
   return function() {
-    window.removeEventListener('resize', debouncedResize);
+    d3.select(window).on("resize.bar", null);
     clearTimeout(resizeTimeout);
+    if (svg.node().__chartResizeObserver) {
+      svg.node().__chartResizeObserver.disconnect();
+    }
   };
 }
 

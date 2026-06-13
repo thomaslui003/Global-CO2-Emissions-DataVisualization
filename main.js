@@ -25,23 +25,27 @@ d3.queue()
     //convert from TopoJSON data into GeoJSON features, which represent the countries         
     var geoData = topojson.feature(mapData, mapData.objects.countries).features; //for the geodata of the map can be access
 
-    //getting the map container width to set the map width
-    var mapWidth = +d3.select(".map-container")
-                    .node().offsetWidth;
+    var mapContainer = d3.select(".map-container").node();
+    var mapWidth = mapContainer.clientWidth;
+    var mapHeight = mapContainer.clientHeight;
 
     //setting the height and width for the sizing of both the bar and pie chart
     var width = +d3.select(".charts-container")
                    .node().offsetWidth;
     var height = 300;
 
-    //initial setting
-    createMap(geoData,mapWidth, mapWidth * 4 / 5);
-    // console.log("the width is this:",width)
+    createMap(geoData, mapWidth, mapHeight);
+    setMapState(geoData, data);
     createPie(width, height);
     createBar(width, height);
     drawMap(geoData, data, currentYear, currentDataType);
     drawPie(data, currentYear);
     drawBar(data, currentDataType, "");
+    setupMapResize();
+    requestAnimationFrame(function() {
+      resizeMap();
+      window.dispatchEvent(new Event("resize"));
+    });
 
   
     d3.select("#year")

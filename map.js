@@ -1,3 +1,100 @@
+var mapState = {
+  geoData: null,
+  climateData: null
+};
+
+var MAP_TOOLBAR = {
+  height: 52,
+  paddingX: 16,
+  buttonWidth: 104,
+  buttonHeight: 32,
+  buttonRadius: 8
+};
+
+function getMapToolbarLayout(width) {
+  var t = MAP_TOOLBAR;
+  return {
+    width: width,
+    height: t.height,
+    paddingX: t.paddingX,
+    buttonX: t.paddingX,
+    buttonY: (t.height - t.buttonHeight) / 2,
+    buttonWidth: t.buttonWidth,
+    buttonHeight: t.buttonHeight,
+    buttonCenterX: t.paddingX + t.buttonWidth / 2,
+    buttonCenterY: t.height / 2,
+    titleX: width / 2,
+    titleY: t.height / 2
+  };
+}
+
+function getMapDimensions() {
+  var container = d3.select(".map-container").node();
+  return {
+    width: container.clientWidth,
+    height: container.clientHeight
+  };
+}
+
+function updateMapChrome(width) {
+  var layout = getMapToolbarLayout(width);
+
+  d3.select(".toolbar-background")
+    .attr("width", layout.width)
+    .attr("height", layout.height);
+
+  d3.select("#reset-zoom-button-bg")
+    .attr("x", layout.buttonX)
+    .attr("y", layout.buttonY)
+    .attr("width", layout.buttonWidth)
+    .attr("height", layout.buttonHeight)
+    .attr("rx", MAP_TOOLBAR.buttonRadius)
+    .attr("ry", MAP_TOOLBAR.buttonRadius);
+
+  d3.select("#reset-zoom-button")
+    .attr("x", layout.buttonCenterX)
+    .attr("y", layout.buttonCenterY);
+
+  d3.select(".map-title")
+    .attr("x", layout.titleX)
+    .attr("y", layout.titleY)
+    .style("font-size", Math.max(14, Math.min(22, width / 35)) + "px");
+
+  d3.select(".map-toolbar").raise();
+}
+
+function setMapState(geoData, climateData) {
+  mapState.geoData = geoData;
+  mapState.climateData = climateData;
+}
+
+function resizeMap() {
+  if (!mapState.geoData || !mapState.climateData) return;
+
+  var dims = getMapDimensions();
+  if (dims.width === 0 || dims.height === 0) return;
+
+  d3.select("#map")
+    .attr("width", dims.width)
+    .attr("height", dims.height);
+
+  updateMapChrome(dims.width);
+
+  // Reset zoom so the new projection and transform stay aligned
+  d3.select("#map").property("__zoom", d3.zoomIdentity);
+
+  var currentYear = +d3.select("#year").property("value");
+  var currentDataType = d3.select("input:checked").property("value");
+  drawMap(mapState.geoData, mapState.climateData, currentYear, currentDataType);
+}
+
+function setupMapResize() {
+  var resizeTimer;
+  d3.select(window).on("resize.map", function() {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(resizeMap, 150);
+  });
+}
 
 function createMap(geoData,width, height) {
 
@@ -39,9 +136,21 @@ function createMap(geoData,width, height) {
     feMerge.append("feMergeNode")
       .attr("in", "SourceGraphic");
   
-    // Create button background with shadow
-    // Created a button group to link the functionality of both the text button and the rect background button
-    const buttonGroup = svg.append("g")
+    // Create unified top toolbar for reset button and title
+    const layout = getMapToolbarLayout(width);
+    const toolbar = svg.append("g").attr("class", "map-toolbar");
+
+    toolbar.append("rect")
+      .attr("class", "toolbar-background")
+      .attr("x", 0)
+      .attr("y", 0)
+      .attr("width", layout.width)
+      .attr("height", layout.height)
+      .attr("fill", "rgba(255, 255, 255, 0.96)")
+      .attr("stroke", "#e8e8e8")
+      .attr("stroke-width", 1);
+
+    const buttonGroup = toolbar.append("g")
       .attr("class", "reset-zoom-group");
 
     //zoom Icon animation initialization
@@ -108,23 +217,25 @@ function createMap(geoData,width, height) {
     //the rectangle button 
     const resetButton = buttonGroup.append("rect")
       .attr("id", "reset-zoom-button-bg")
-      .attr("x", 4)
-      .attr("y", 4)
-      .attr("width", 80)
-      .attr("height", 30)
-      .attr("fill", "#f0f0f0")
-      .attr("stroke", "#ccc")
-      .attr("rx", 11)
-      .attr("ry", 11)
+      .attr("x", layout.buttonX)
+      .attr("y", layout.buttonY)
+      .attr("width", layout.buttonWidth)
+      .attr("height", layout.buttonHeight)
+      .attr("fill", "#ffffff")
+      .attr("stroke", "#d0d0d0")
+      .attr("rx", MAP_TOOLBAR.buttonRadius)
+      .attr("ry", MAP_TOOLBAR.buttonRadius)
       .attr("filter", "url(#drop-shadow)")
       .style("cursor", "pointer")
       .on("mouseover", function() {
         d3.select(this)
-          .attr("fill", "#e0e0e0");  // Lighter gray on hover
+          .attr("fill", "#f7f7f7")
+          .attr("stroke", "#FE9D52");
       })
       .on("mouseout", function() {
         d3.select(this)
-          .attr("fill", "#f0f0f0");  // Return to original color
+          .attr("fill", "#ffffff")
+          .attr("stroke", "#d0d0d0");
       })
       .on("click", function() {
         // This will be populated in the drawMap function
@@ -136,11 +247,11 @@ function createMap(geoData,width, height) {
       resetButton
         .transition()
         .duration(800)
-        .attr("stroke", "#4CAF50")
-        .attr("stroke-width", "4")
+        .attr("stroke", "#FE9D52")
+        .attr("stroke-width", "2")
         .transition()
         .duration(800)
-        .attr("stroke", "#ccc")
+        .attr("stroke", "#d0d0d0")
         .attr("stroke-width", "1");
     }
 
@@ -151,57 +262,39 @@ function createMap(geoData,width, height) {
 
     buttonGroup.append("text")
     .attr("id", "reset-zoom-button")
-    .attr("x", 44) 
-    .attr("y", 22)  
-    .attr("font-size", "12px")
+    .attr("x", layout.buttonCenterX)
+    .attr("y", layout.buttonCenterY)
+    .attr("font-size", "13px")
+    .attr("font-weight", "600")
     .attr("text-anchor", "middle")
-    .attr("fill", "#333")
+    .attr("dominant-baseline", "middle")
+    .attr("fill", "#2d2c2c")
     .attr("cursor", "pointer")
     .text("Reset Zoom")
-    // .style("text-decoration", "underline")
     .on("mouseover", function() {
       d3.select("#reset-zoom-button-bg")
-        .attr("fill", "#e0e0e0");  // Lighter gray on hover
+        .attr("fill", "#f7f7f7")
+        .attr("stroke", "#FE9D52");
     })
     .on("mouseout", function() {
       d3.select("#reset-zoom-button-bg")
-        .attr("fill", "#f0f0f0");  // Return to original color
+        .attr("fill", "#ffffff")
+        .attr("stroke", "#d0d0d0");
     })
     .on("click", function() {
       // This will be populated in the drawMap function
     });
 
-  
-  // Create a group for the title and its background
-  const svgTitle = svg.append("g")
-    .attr("class", "title-group");
-
-  // Add white background rectangle for the title
-  svgTitle.append("rect")
-    .attr("class", "title-background")
-    .attr("x", width / 2)
-    .attr("y", "0.7em")
-    .attr("width", 340)  // You can adjust this width as needed
-    .attr("height", "2em")
-    .attr("fill", "white")
-    .attr("opacity", 0.9)
-    .attr("transform", "translate(-170, 0)")  // Center the rectangle by shifting it left by half its width
-    .attr("rx", 9)  // Rounded corners
-    .attr("ry", 9);  // Rounded corners
-
-  // Add the title text
-  svgTitle.append("text")
-    .attr("x", width / 2)
-    .attr("y", "1.5em")
-    .attr("font-size", "1.5em")
-    .style("text-anchor", "middle")
+  toolbar.append("text")
+    .attr("x", layout.titleX)
+    .attr("y", layout.titleY)
+    .attr("font-weight", "600")
+    .attr("fill", "#2c3e50")
+    .attr("text-anchor", "middle")
+    .attr("dominant-baseline", "middle")
     .classed("map-title", true);
 
-
-  // Add responsive behavior for the svg#map
-  responsivefy(svg);
-
-
+  updateMapChrome(width);
 }
 
 
@@ -214,14 +307,11 @@ function drawMap(geoData, climateData, year, dataType) {
 
   mapGroup.selectAll("*").remove();
   
-  //ensure the scaling for the original map is centered 
-  // used the width divided by a modifiable number to get a better scaling for the map
   var projection = d3.geoMercator()
-    .scale(width/7.3) 
-    .translate([
-      width / 2,
-      height / 1.5
-    ]);
+    .fitExtent(
+      [[20, MAP_TOOLBAR.height + 14], [width - 20, height - 20]],
+      { type: "FeatureCollection", features: geoData }
+    );
 
   //define map path
   var path = d3.geoPath()
@@ -273,6 +363,7 @@ function drawMap(geoData, climateData, year, dataType) {
       var countryName = isActive ? "" : country.data()[0].properties.country;
       drawBar(climateData, currentDataType, countryName);
       highlightBars(+d3.select("#year").property("value"));
+      highlightPieCountry(countryName);
       d3.selectAll(".country").classed("active", false);
       country.classed("active", !isActive);
     })
@@ -287,6 +378,9 @@ function drawMap(geoData, climateData, year, dataType) {
     
   d3.select(".map-title")
     .text("CO2 " + graphTitle(dataType) + " in " + year);
+
+  updateMapChrome(width);
+  d3.select(".map-toolbar").raise();
 
 
   const zoom = d3.zoom()
@@ -318,39 +412,5 @@ function drawMap(geoData, climateData, year, dataType) {
 
 function graphTitle(str) {
   return str.replace(/[A-Z]/g, c => " " + c.toLowerCase());
-}
-
-
-
-
-//function for resizing the map when window size changes
-function responsivefy(svg) {
-  // Get the container and calculate the aspect ratio
-
-  var container = d3.select(svg.node().parentNode),
-      width = parseInt(svg.style("width")),
-      height = parseInt(svg.style("height")),
-      aspect = width / height;
-
-  // const chartsContainer = d3.select('.charts-container');
-
-  // Set up the viewBox and preserveAspectRatio attributes
-  svg.attr("viewBox", "0 0 " + width + " " + height)
-      .attr("preserveAspectRatio", "xMinYMid")
-      .call(resize);
-
-  // Add resize event listener
-  d3.select(window).on("resize." + container.attr("id"), resize);
-
-  function resize() {
-      var targetWidth = parseInt(container.style("width"));
-      var containerHeight = parseInt(container.style("height"));
-      
-      // Ensure height adapts properly, maintaining aspect ratio or matching container
-      var targetHeight = containerHeight|| Math.round(containerWidth / aspect);
-
-      svg.attr("width", targetWidth);
-      svg.attr("height", targetHeight);
-  }
 }
 
